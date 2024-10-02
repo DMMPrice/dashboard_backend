@@ -14,7 +14,7 @@ app.register_blueprint(windApi, url_prefix='/wind')
 
 @app.route('/')
 def hello_world():
-    return 'Hello World!'
+    return 'GUVNL is running!'
 
 
 if __name__ == '__main__':
