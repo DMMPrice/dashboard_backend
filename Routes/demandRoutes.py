@@ -19,7 +19,7 @@ def get_demand_data():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT `TimeStamp`, `Demand(Actual)`,`Demand(Pred)` FROM demand_data")
+        cursor.execute("SELECT * FROM demand_data")
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -36,7 +36,7 @@ def get_demand_data_by_year():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        query = "SELECT `TimeStamp`, `Demand(Actual)`,`Demand(Pred)` FROM demand_data WHERE YEAR(TimeStamp) = %s"
+        query = "SELECT * FROM demand_data WHERE YEAR(TimeStamp) = %s"
         cursor.execute(query, (year,))
         rows = cursor.fetchall()
         cursor.close()
