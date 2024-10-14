@@ -27,25 +27,6 @@ def get_wind_data():
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)})
 
-
-@windApi.route('/year', methods=['GET'])
-def get_wind_data_by_year():
-    year = request.args.get('year')
-    if not year:
-        return jsonify({"error": "Year parameter is required"}), 400
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        query = "SELECT `TimeStamp`, `Wind(Actual)`,`Wind(Pred)` FROM wind_data WHERE YEAR(TimeStamp) = %s"
-        cursor.execute(query, (year,))
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return jsonify(rows)
-    except mysql.connector.Error as err:
-        return jsonify({"error": str(err)})
-
-
 @windApi.route('/consumed', methods=['GET'])
 def get_wind_data_consumed():
     try:
@@ -84,11 +65,25 @@ def get_sum_wind():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        query = "SELECT SUM(`Wind(Actual)`) as total_wind FROM wind_data WHERE `TimeStamp` BETWEEN %s AND %s"
-        cursor.execute(query, (start_date, end_date))
-        result = cursor.fetchone()
+
+        # First query to get the sum of Solar(Pred)
+        query_1 = "SELECT SUM(`Wind(Pred)`) as total_wind FROM wind_data WHERE `TimeStamp` BETWEEN %s AND %s"
+        cursor.execute(query_1, (start_date, end_date))
+        result_1 = cursor.fetchone()
+
+        # Second query to get the total price
+        query_2 = "SELECT SUM(ROUND(`Wind(Actual)` * `Price (Rs/ KWh)`,2)) as total_price FROM wind_data WHERE `TimeStamp` BETWEEN %s AND %s"
+        cursor.execute(query_2, (start_date, end_date))
+        result_2 = cursor.fetchone()
+
         cursor.close()
         conn.close()
+
+        # Combine the results
+        result = [
+            result_1,result_2
+        ]
+
         return jsonify(result)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)})

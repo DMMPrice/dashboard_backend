@@ -1,34 +1,42 @@
-# solarRoutes.py
+# Routes/intrastateRoutes.py
 from flask import Blueprint, jsonify, request
 import mysql.connector
 
 # Create a Blueprint
-solarApi = Blueprint('solar', __name__)
+interStateApi = Blueprint('interstate', __name__)
 
 # MySQL configuration
 db_config = {
     'user': 'root',
     'password': '',
     'host': 'localhost',
-    'database': 'guvnl-db'
+    'database': 'guvnl-inter'
 }
 
 
-@solarApi.route('/all', methods=['GET'])
-def get_solar_data():
+@interStateApi.route('/all', methods=['GET'])
+def get_inter_state_data():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT `TimeStamp`, `Solar(Actual)`,`Solar(Pred)` FROM solar_data")
-        rows = cursor.fetchall()
+
+        # Query to get the table names
+        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'guvnl-inter'")
+        tables = cursor.fetchall()
+
         cursor.close()
         conn.close()
-        return jsonify(rows)
+
+        # Extract table names into a single array
+        table_names = [table['table_name'] for table in tables]
+
+        return jsonify(table_names)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)})
 
-@solarApi.route('/sum_solar', methods=['GET'])
-def get_sum_solar():
+
+@interStateApi.route('/<table_name>', methods=['GET'])
+def get_inter_state_data_by_table(table_name):
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     if not start_date or not end_date:
@@ -39,14 +47,14 @@ def get_sum_solar():
         cursor = conn.cursor(dictionary=True)
 
         # First query to get the sum of Solar(Pred)
-        query_1 = "SELECT SUM(`Solar(Pred)`) as total_solar FROM solar_data WHERE `TimeStamp` BETWEEN %s AND %s"
+        query_1 = f"SELECT SUM(`Pred`) as total_generate FROM {table_name} WHERE `TimeStamp` BETWEEN %s AND %s"
         cursor.execute(query_1, (start_date, end_date))
-        result_1 = cursor.fetchall()
+        result_1 = cursor.fetchone()
 
         # Second query to get the total price
-        query_2 = "SELECT SUM(ROUND(`Solar(Pred)` * `Pred Price(Rs/ KWh)`, 2)) as total_price FROM solar_data WHERE `TimeStamp` BETWEEN %s AND %s"
+        query_2 = f"SELECT SUM(ROUND(`Pred` * `Pred Price(Rs/ KWh)`, 2)) as total_price FROM {table_name} WHERE `TimeStamp` BETWEEN %s AND %s"
         cursor.execute(query_2, (start_date, end_date))
-        result_2 = cursor.fetchall()
+        result_2 = cursor.fetchone()
 
         cursor.close()
         conn.close()
