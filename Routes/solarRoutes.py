@@ -7,10 +7,10 @@ solarApi = Blueprint('solar', __name__)
 
 # MySQL configuration
 db_config = {
-    'user': 'root',
-    'password': '',
-    'host': 'localhost',
-    'database': 'guvnl-db'
+    'user': 'admin',
+    'password': 'Babai123',
+    'host': 'guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com',
+    'database': 'guvnldb'
 }
 
 

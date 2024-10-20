@@ -7,10 +7,10 @@ windApi = Blueprint('wind', __name__)
 
 # MySQL configuration
 db_config = {
-    'user': 'root',
-    'password': '',
-    'host': 'localhost',
-    'database': 'guvnl-db'
+    'user': 'admin',
+    'password': 'BaBa@123',
+    'host': 'guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com',
+    'database': 'guvnldb'
 }
 
 
