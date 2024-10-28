@@ -33,12 +33,12 @@ def renewable():
 
     try:
         # Fetch data from /wind/sum_wind
-        wind_response = requests.get('http://3.109.157.36:4000/wind/sum_wind',
+        wind_response = requests.get('http://172.31.14.167:4000/wind/sum_wind',
                                      params={'start_date': start_date, 'end_date': end_date})
         wind_data = wind_response.json()
 
         # Fetch data from /solar/sum_solar
-        solar_response = requests.get('http://3.109.157.36:4000/solar/sum_solar',
+        solar_response = requests.get('http://172.31.14.167:4000/solar/sum_solar',
                                       params={'start_date': start_date, 'end_date': end_date})
         solar_data = solar_response.json()
 
