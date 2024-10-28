@@ -21,14 +21,14 @@ def get_inter_state_data():
         cursor = conn.cursor(dictionary=True)
 
         # Query to get the table names
-        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'guvnl-inter'")
+        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'guvnlinter'")
         tables = cursor.fetchall()
 
         cursor.close()
         conn.close()
 
         # Extract table names into a single array
-        table_names = [table['table_name'] for table in tables]
+        table_names = [table['TABLE_NAME'] for table in tables]
 
         return jsonify(table_names)
     except mysql.connector.Error as err:
