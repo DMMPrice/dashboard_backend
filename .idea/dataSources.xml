@@ -8,5 +8,19 @@
       <jdbc-url>jdbc:mysql://guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com:3306/guvnldb</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
+    <data-source source="LOCAL" name="guvnlinter@guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com" uuid="d2bc853e-40b7-4a67-a96a-6d160ead47b1">
+      <driver-ref>mysql.8</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
+      <jdbc-url>jdbc:mysql://guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com:3306/guvnlinter</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+    <data-source source="LOCAL" name="@guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com" uuid="cdb7a29f-8fc2-4825-980b-27a50d81e139">
+      <driver-ref>mysql.8</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
+      <jdbc-url>jdbc:mysql://guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com:3306</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
   </component>
 </project>
