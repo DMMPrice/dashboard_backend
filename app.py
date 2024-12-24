@@ -3,17 +3,12 @@ from flask_cors import CORS
 from Routes.demandRoutes import demandApi
 from Routes.plantRoutes import plantAPI
 from Routes.procurementRoutes import procurementAPI
-from Routes.solarRoutes import solarApi
-from Routes.windRoutes import windApi
 import requests
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes and origins
 
 # Register the Blueprint
-app.register_blueprint(demandApi, url_prefix='/demand')
-app.register_blueprint(windApi, url_prefix='/wind')
-app.register_blueprint(solarApi, url_prefix='/solar')
 app.register_blueprint(procurementAPI, url_prefix='/procurement')
 app.register_blueprint(plantAPI, url_prefix='/plant')
 

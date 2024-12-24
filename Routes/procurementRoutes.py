@@ -25,7 +25,7 @@ def get_demand_data():
         cursor = conn.cursor(dictionary=True)
 
         # Fetch the sum of Demand(Pred) within the date range
-        sum_query = ("SELECT SUM(`Demand(Pred)`)*1000 as total_demand , COUNT(`Demand(Pred)`) as total_blocks FROM "
+        sum_query = ("SELECT SUM(`Demand(Pred)`) as total_demand, COUNT(`Demand(Pred)`) as total_blocks FROM "
                      "demand_data WHERE `TimeStamp` BETWEEN %s AND %s")
         cursor.execute(sum_query, (start_date, end_date))
         sum_result = cursor.fetchone()
@@ -37,11 +37,16 @@ def get_demand_data():
         cursor.close()
         conn.close()
 
+        # Multiply each Demand(Actual) and Demand(Pred) by 1000 and 0.25
+        for item in sum_result_2:
+            item['Demand(Actual)'] = round(float(item['Demand(Actual)']) * 1000 * 0.25, 3)
+            item['Demand(Pred)'] = round(float(item['Demand(Pred)']) * 1000 * 0.25, 3)
+
         # Combine the data and sum into a single response
         response = {
             "start_date": start_date,
             "end_date": end_date,
-            "total_demand": sum_result['total_demand'] * 1000,
+            "total_demand": round(sum_result['total_demand'] * 1000 * sum_result['total_blocks'] * 0.25, 3),
             "total_blocks": sum_result['total_blocks'],
             "demand_list": sum_result_2,
         }
@@ -73,7 +78,8 @@ def get_exchange_data():
         for i in range(len(sum_result)):
             if sum_result[i]['Pred_Price'] > float(cap_price):
                 sum_result[i]['Pred_Price'] = -1
-
+            else:
+                sum_result[i]['Qty_Pred'] = round(sum_result[i]['Qty_Pred'] * 1000 * 0.25, 3)
         cursor.close()
         conn.close()
 

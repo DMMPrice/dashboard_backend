@@ -10,7 +10,7 @@ db_config = {
     'user': 'admin',
     'password': 'Babai123',
     'host': 'guvnl.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com',
-    'database': 'guvnldb'
+    'database': 'guvnl_dev'
 }
 
 

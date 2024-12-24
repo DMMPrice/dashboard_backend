@@ -17,68 +17,103 @@ db_config = {
 def get_other_run():
     net_demand = request.args.get('net_demand')
     if not net_demand:
-        return jsonify({"error": "Net demand parameters are required"}), 400
+        return jsonify({"error": "Net demand parameter is required"}), 400
+
     try:
+        net_demand = float(net_demand)
+        if net_demand <= 0:
+            return jsonify({"error": "Net demand must be greater than zero"}), 400
+
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # Fetch the sum of Demand(Pred) within the date range
-        sum_query = (
-            "SELECT `name`,`Code`, `Rated_Capacity`,`PAF`, `PLF`, `Type`, `Technical_Minimum`, `Aux_Consumption`, "
-            "`Variable_Cost` FROM `plant_details` WHERE `Type` = 'Other' ORDER BY `Variable_Cost` ASC")
-        cursor.execute(sum_query)
-        sum_result = cursor.fetchall()
+        query = (
+            "SELECT `name`, `Code`, `Rated_Capacity`, `PAF`, `PLF`, `Type`, `Technical_Minimum`, "
+            "`Aux_Consumption`, `Variable_Cost` FROM `plant_details` WHERE `Type` = 'Other' "
+            "ORDER BY `Variable_Cost` ASC"
+        )
+        cursor.execute(query)
+        plants = cursor.fetchall()
 
-        temp_demand = float(net_demand)
+        temp_demand = net_demand
         other_plants_charge = []
-        plant_data = sum_result
-        for i in range(len(plant_data)):
-            if temp_demand == 0:
-                break
-            else:
-                single_plant = plant_data[i]
-                single_plant_generation = float(single_plant['Rated_Capacity'] * single_plant['PAF'] * single_plant[
-                    'PLF'] * 0.25 * 1000 * (1 - single_plant['Aux_Consumption']))
-                single_plant_generation_no_plf = single_plant_generation / single_plant['PLF']
-                if single_plant_generation > temp_demand:
-                    single_plant_generation = temp_demand
-                    plf = single_plant_generation / single_plant_generation_no_plf
-                    single_plant_generation_cost = single_plant['Variable_Cost'] * single_plant_generation
-                    temp_demand = 0
-                    plant_details = {
-                        "name": single_plant['name'],
-                        "generation": single_plant_generation,
-                        "code": single_plant['Code'],
-                        "cost": single_plant_generation_cost,
-                        "PLF": plf,
-                        "PAF": single_plant['PAF'],
-                        "Type": single_plant['Type'],
-                        "Aux_Consumption": single_plant['Aux_Consumption'],
-                        "Technical_Minimum": single_plant['Technical_Minimum']
-                    }
-                    other_plants_charge.append(plant_details)
-                else:
-                    single_plant_generation_cost = single_plant['Variable_Cost'] * single_plant_generation
-                    temp_demand = float(temp_demand) - single_plant_generation
-                    plant_details = {
-                        "name": single_plant['name'],
-                        "code": single_plant['Code'],
-                        "generation": single_plant_generation,
-                        "cost": single_plant_generation_cost,
-                        "PLF": single_plant['PLF'],
-                        "PAF": single_plant['PAF'],
-                        "Type": single_plant['Type'],
-                        "Aux_Consumption": single_plant['Aux_Consumption'],
-                        "Technical_Minimum": single_plant['Technical_Minimum']
-                    }
-                    other_plants_charge.append(plant_details)
-                    temp_demand = float(temp_demand) - single_plant_generation
+        excess_generation_adjusted = False
 
-        return jsonify({"other": other_plants_charge, "net-demand": temp_demand}), 200
+        for i, plant in enumerate(plants):
+            if temp_demand <= 0:
+                break
+
+            # Calculate maximum generation
+            rated_capacity = float(plant['Rated_Capacity'])
+            paf = float(plant['PAF'])
+            plf = float(plant['PLF'])
+            aux = float(plant['Aux_Consumption'])
+            tech_min = float(plant['Technical_Minimum'])
+
+            max_generation = (
+                    rated_capacity * paf * plf * 0.25 * 1000 * (1 - aux)
+            )
+            tech_min_gen = rated_capacity * tech_min * paf * 0.25 * 1000 * (1 - aux)
+
+            # Ensure TM generation is met
+            if temp_demand < tech_min_gen:
+                temp_demand -= tech_min_gen
+                other_plants_charge.append({
+                    "name": plant['name'],
+                    "code": plant['Code'],
+                    "Rated_Capacity": rated_capacity,
+                    "generation": round(tech_min_gen, 3),
+                    "cost": round(tech_min_gen * float(plant['Variable_Cost']), 2),
+                    "PLF": plf,
+                    "PAF": paf,
+                    "Type": plant['Type'],
+                    "Aux_Consumption": aux,
+                    "Technical_Minimum": tech_min,
+                    "Variable_Cost": plant['Variable_Cost'],
+                })
+                continue
+
+            actual_generation = min(max_generation, temp_demand)
+            temp_demand -= actual_generation
+
+            if temp_demand < 0 and not excess_generation_adjusted:
+                # Adjust excess from the second last plant
+                excess_generation_adjusted = True
+                last_plant = other_plants_charge[-1]
+                excess = abs(temp_demand)
+                new_generation = last_plant['generation'] - excess
+                new_plf = new_generation / (rated_capacity * paf * 0.25 * 1000 * (1 - aux))
+                last_plant['generation'] = new_generation
+                last_plant['PLF'] = new_plf
+                temp_demand = 0
+
+            generation_cost = round(actual_generation * float(plant['Variable_Cost']), 3)
+
+            other_plants_charge.append({
+                "name": plant['name'],
+                "code": plant['Code'],
+                "Rated_Capacity": rated_capacity,
+                "generation": round(actual_generation, 3),
+                "cost": round(generation_cost, 2),
+                "PLF": plf,
+                "PAF": paf,
+                "Type": plant['Type'],
+                "Aux_Consumption": aux,
+                "Technical_Minimum": tech_min,
+                "Variable_Cost": plant['Variable_Cost'],
+            })
+
+        return jsonify({
+            "other": other_plants_charge,
+            "remaining_demand": temp_demand
+        }), 200
+
     except mysql.connector.Error as err:
-        return jsonify({"error": str(err)})
+        return jsonify({"error": f"MySQL error: {str(err)}"}), 500
+    except ValueError as ve:
+        return jsonify({"error": f"Value error: {str(ve)}"}), 400
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
 @plantAPI.route('/must-run', methods=['GET'])
@@ -110,7 +145,7 @@ def get_must_run():
                     plant_result = [{"TimeStamp": timestamp, "Pred": 0.00}]
             except mysql.connector.Error:
                 plant_result = [{"TimeStamp": timestamp, "Pred": 0.00}]
-            print(plant_result)
+            # print(plant_result)
             generated_energy = float(plant_result[0]['Pred'])
             variable_cost = float(plant['Variable_Cost'])
             plant_data.append({
@@ -123,8 +158,8 @@ def get_must_run():
                 "Technical_Minimum": plant['Technical_Minimum'],
                 "Aux_Consumption": plant['Aux_Consumption'],
                 "Variable_Cost": variable_cost,
-                "generated_energy": generated_energy,
-                "net_cost": generated_energy * variable_cost
+                "generated_energy": round(generated_energy * 1000 * 0.25, 3),
+                "net_cost": round(generated_energy * variable_cost * 1000 * 0.25, 2)
             })
 
         cursor.close()
