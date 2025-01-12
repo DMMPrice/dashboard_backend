@@ -13,6 +13,10 @@ db_config = {
 }
 
 
+from flask import request, jsonify
+import mysql.connector
+import json
+
 @procurementAPI.route('/demand', methods=['GET'])
 def get_demand_data():
     start_date = request.args.get('start_date')
@@ -25,36 +29,28 @@ def get_demand_data():
         cursor = conn.cursor(dictionary=True)
 
         # Fetch the sum of Demand(Pred) within the date range
-        sum_query = ("SELECT SUM(`Demand(Pred)`) as total_demand, COUNT(`Demand(Pred)`) as total_blocks FROM "
-                     "demand_data WHERE `TimeStamp` BETWEEN %s AND %s")
+        sum_query = "SELECT * FROM demand_output WHERE `TimeStamp` BETWEEN %s AND %s"
         cursor.execute(sum_query, (start_date, end_date))
-        sum_result = cursor.fetchone()
+        sum_result = cursor.fetchall()
 
-        sum_query_2 = "SELECT * FROM demand_data WHERE `TimeStamp` BETWEEN %s AND %s"
-        cursor.execute(sum_query_2, (start_date, end_date))
-        sum_result_2 = cursor.fetchall()
+        # Decode JSON fields
+        for row in sum_result:
+            for key in ['IEX_Data', 'Must_Run', 'Remaining_Plants']:  # Adjust based on your field names
+                if key in row and row[key]:
+                    try:
+                        row[key] = json.loads(row[key])  # Convert JSON string to dictionary
+                    except json.JSONDecodeError:
+                        row[key] = f"Invalid JSON: {row[key]}"  # Handle JSON decode errors gracefully
 
         cursor.close()
         conn.close()
 
-        # Multiply each Demand(Actual) and Demand(Pred) by 1000 and 0.25
-        for item in sum_result_2:
-            item['Demand(Actual)'] = round(float(item['Demand(Actual)']) * 1000 * 0.25, 3)
-            item['Demand(Pred)'] = round(float(item['Demand(Pred)']) * 1000 * 0.25, 3)
-
-        # Combine the data and sum into a single response
-        response = {
-            "start_date": start_date,
-            "end_date": end_date,
-            "total_demand": round(sum_result['total_demand'] * 1000 * sum_result['total_blocks'] * 0.25, 3),
-            "total_blocks": sum_result['total_blocks'],
-            "demand_list": sum_result_2,
-        }
-        return jsonify(response)
+        return jsonify(sum_result), 200
     except mysql.connector.Error as err:
-        return jsonify({"error": str(err)})
+        return jsonify({"error": str(err)}), 500
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
+
 
 
 @procurementAPI.route('/exchange', methods=['GET'])
@@ -132,33 +128,6 @@ def get_plant_data():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-
-@procurementAPI.route('/plant-all', methods=['GET'])
-def get_all_plant_data():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
-        # Fetch the sum of Demand(Pred) within the date range
-        sum_query = (
-            "SELECT `name`,`Code`, `Rated_Capacity`,`PAF`, `PLF`, `Type`, `Technical_Minimum`, `Aux_Consumption`, "
-            "`Variable_Cost` FROM `plant_details`")
-        cursor.execute(sum_query)
-        sum_result = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
-
-        # Combine the data and sum into a single response
-        response = {
-            "plant_count": len(sum_result),
-            "plant_data": sum_result
-        }
-        return jsonify(response), 200
-    except mysql.connector.Error as err:
-        return jsonify({"error": str(err)})
-    except Exception as e:
-        return jsonify({"error": str(e)})
 
 
 @procurementAPI.route('/<plant_name>', methods=['GET'])
