@@ -1,9 +1,9 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from Routes.demandRoutes import demandApi
-from Routes.procurementRoutes import plantAPI
-from Routes.plantRoutes import procurementAPI
-from Routes.consumerRoutes import consumerAPI
+from GetRoutes.demandRoutes import demandApi
+from GetRoutes.procurementRoutes import plantAPI
+from GetRoutes.plantRoutes import procurementAPI
+from GetRoutes.consumerRoutes import consumerAPI
 import requests
 
 app = Flask(__name__)

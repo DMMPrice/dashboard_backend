@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 import mysql.connector
 import concurrent.futures
 from typing import List, Dict, Any, Tuple, Union
+from datetime import datetime
 import pprint
 
 # ----------------------------- Blueprint Setup -----------------------------
@@ -133,7 +134,8 @@ def allocate_generation(plants: List[Dict[str, Any]], net_demand: float) -> Dict
             'plant_code': plant_code,
             'allocated_gen': allocated_gen,
             'min_gen': min_power,
-            'max_gen': max_power
+            'max_gen': max_power,
+            'Type': plant['Type']
         })
         total_allocated += allocated_gen
 
@@ -344,20 +346,124 @@ def get_exchange_data(timestamp: str, cap_price: float) -> Union[List[Dict[str, 
         return {"error": str(e)}
 
 
-def get_other_run(net_demand: float) -> Dict[str, Any]:
+def get_valid_plants(plants: List[Dict[str, Any]], db_config: Dict[str, str], user_timestamp: datetime, cursor) -> List[
+    Dict[str, Any]]:
+    """
+    Checks each plant's table for data availability at the specified timestamp.
+
+    Parameters:
+    - plants (List[Dict[str, Any]]): List of plant details, where each plant has a "Code" key for the table name.
+    - db_config (Dict[str, str]): Database configuration dictionary.
+    - user_timestamp (datetime): Timestamp for which data availability is checked.
+    - cursor: Database cursor object for executing queries.
+
+    Returns:
+    - List[Dict[str, Any]]: List of plants with valid data for the given timestamp.
+    """
+    valid_plants = []  # List to hold plants with valid data for the specified timestamp
+
+    for plant in plants:
+        plant_code = plant["Code"]  # Table name is the same as the plant code
+
+        # Check if the table exists
+        check_table_query = (
+            "SELECT COUNT(*) as table_count "
+            "FROM information_schema.tables "
+            "WHERE table_schema = %s AND table_name = %s"
+        )
+        cursor.execute(check_table_query, (db_config["database"], plant_code))
+        table_exists = cursor.fetchone()["table_count"] > 0
+
+        if table_exists:
+            # Query for data availability for the given timestamp
+            data_query = (
+                f"SELECT * FROM {plant_code} "
+                "WHERE TimeStamp = %s LIMIT 1"
+            )
+            cursor.execute(data_query, (user_timestamp,))
+            plant_data = cursor.fetchall()
+
+            # To check if there is data or not
+
+            if plant_data:
+                if plant_data[0]["Actual"] > 0:
+                    plant["PAF"] = 1
+                    valid_plants.append(plant)  # Add plant to valid list if data exists
+    return valid_plants
+
+
+def get_other_run(net_demand: float, timestamp: str) -> Dict[str, Any]:
     """
     Retrieves and allocates energy generation for "Other" type plants based on net demand.
 
     Parameters:
-    - net_demand (float): The remaining net demand after accounting for "Must Run" and IEX allocations (in kWh).
+    ----------
+    net_demand : float
+        The remaining net demand after accounting for "Must Run" and IEX allocations (in kWh).
+    timestamp : str
+        The specific timestamp for which the generation data is required.
+        Expected format: 'YYYY-MM-DD HH:MM:SS'.
 
     Returns:
-    - dict:
-        - 'other_plant_data' (list of dict): Detailed allocation for each "Other" plant.
-        - 'total_cost' (float): Total cost of the allocation.
-        - 'error' (str, optional): Error message in case of failure.
+    -------
+    dict
+        A dictionary containing:
+        - 'other_plant_data' (list of dict): Detailed allocation for each "Other" type plant. Each dictionary in the
+          list includes:
+            - 'plant_name' (str): Name of the plant.
+            - 'plant_code' (str): Unique code for the plant.
+            - 'rated_capacity' (float): Rated capacity of the plant in MW.
+            - 'paf' (float): Plant Availability Factor.
+            - 'Aux_Consumption' (float): Auxiliary consumption rate.
+            - 'plf' (float): Plant Load Factor.
+            - 'Variable_Cost' (float): Cost per unit of energy.
+            - 'max_power' (float): Maximum generation capacity of the plant.
+            - 'min_power' (float): Minimum generation capacity of the plant.
+            - 'generated_energy' (float): Energy generated in kWh.
+            - 'net_cost' (float): Total cost for the generated energy.
+        - 'total_cost' (float): Total cost of the allocated energy.
+        - 'error' (str, optional): An error message in case of failure.
+
+    Raises:
+    ------
+    ValueError
+        If the net demand is less than or equal to zero.
+
+    Notes:
+    -----
+    - The function ensures all database connections are properly closed, even in the event of errors.
+    - If no valid plants are found or an error occurs during database operations, an error message is returned.
+    - The function handles exceptions gracefully to provide meaningful error messages.
+
+    Examples:
+    --------
+    # >>> get_other_run(5000.0, "2024-05-01 12:00:00")
+    {
+        'other_plant_data': [
+            {
+                'plant_name': 'Plant A',
+                'plant_code': 'PLT001',
+                'rated_capacity': 200.0,
+                'paf': 0.85,
+                'Aux_Consumption': 0.05,
+                'plf': 0.76,
+                'Variable_Cost': 2.5,
+                'max_power': 180.0,
+                'min_power': 50.0,
+                'generated_energy': 4000.0,
+                'net_cost': 10000.0
+            }
+        ],
+        'total_cost': 10000.0
+    }
     """
     # Validate net_demand parameter
+    timestamp = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    # if timestamp.year >= 2021:
+    #     timestamp = timestamp.replace(year=2021)
+    timestamp = timestamp.replace(year=2021)
+    # print(timestamp)
+
     if not net_demand:
         return {"error": "Net demand parameter is required"}
 
@@ -380,8 +486,11 @@ def get_other_run(net_demand: float) -> Dict[str, Any]:
         cursor.execute(query)
         plants = cursor.fetchall()
 
+        # Fetch valid plants with data for the specified timestamp
+        valid_plants = get_valid_plants(plants, db_config, timestamp, cursor)
+
         # Allocate generation using the allocate_generation function
-        generation = allocate_generation(plants, net_demand)
+        generation = allocate_generation(valid_plants, net_demand)
 
         # Close database cursor and connection
         cursor.close()
@@ -428,6 +537,8 @@ def get_demand():
     """
     # Extract query parameters from the request
     start_date = request.args.get('start_date')  # Expected format: 'YYYY-MM-DD HH:MM:SS'
+    # formatted_date = start_date[:19]
+    start_date = start_date[:19]
     price_cap = request.args.get('price_cap')  # Expected to be a float
 
     # Validate presence of start_date parameter
@@ -489,7 +600,7 @@ def get_demand():
             net_demand_2 = net_demand - iex_gen
 
             # 5) Other plant data: Fetch and allocate generation to "Other" plants based on remaining demand
-            remaining_plants_data = get_other_run(net_demand_2)
+            remaining_plants_data = get_other_run(net_demand_2, start_date)
 
             # Extract the last Variable_Cost for reference
             if remaining_plants_data.get('other_plant_data'):
