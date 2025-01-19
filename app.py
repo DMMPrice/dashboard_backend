@@ -1,9 +1,10 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from GetRoutes.demandRoutes import demandApi
-from GetRoutes.procurementRoutes import plantAPI
-from GetRoutes.plantRoutes import procurementAPI
-from GetRoutes.consumerRoutes import consumerAPI
+from Routes.demandRoutes import demandApi
+from Routes.procurementRoutes import plantAPI
+from Routes.plantRoutes import procurementAPI
+from Routes.consumerRoutes import consumerAPI
+# from PostRoutes.procurementRoutes import procurement
 import requests
 
 app = Flask(__name__)
@@ -11,6 +12,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes and
 
 # Register the Blueprint
 app.register_blueprint(procurementAPI, url_prefix='/procurement')
+# app.register_blueprint(procurement, url_prefix='/procurement/post')
 app.register_blueprint(plantAPI, url_prefix='/plant')
 app.register_blueprint(demandApi, url_prefix='/demand')
 app.register_blueprint(consumerAPI, url_prefix='/consumer')

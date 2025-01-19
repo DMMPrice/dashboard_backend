@@ -171,3 +171,80 @@ def get_each_plant_data(plant_name):
         return jsonify({"error": "No Data Found"})
     except Exception as e:
         return jsonify({"error": "No Data Found"})
+
+
+@procurementAPI.route('/<plant_name>', methods=['POST'])
+def add_plant_data(plant_name):
+    """Add new data for the specified plant."""
+    try:
+        data = request.get_json()
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        insert_query = f"""
+        INSERT INTO `plant_details` 
+        (Name, Code, Ownership, Fuel_Type, Rated_Capacity, PAF, PLF, Aux_Consumption, Variable_Cost, Type, Technical_Minimum, Max_Power, Min_Power)
+        VALUES (%(Name)s, %(Code)s, %(Ownership)s, %(Fuel_Type)s, %(Rated_Capacity)s, %(PAF)s, %(PLF)s, %(Aux_Consumption)s, %(Variable_Cost)s, %(Type)s, %(Technical_Minimum)s, %(Max_Power)s, %(Min_Power)s)
+        """
+        cursor.execute(insert_query, data)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Plant data inserted successfully"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@procurementAPI.route('/<plant_name>', methods=['PUT'])
+def update_plant_data(plant_name):
+    """Update existing data for the specified plant."""
+    try:
+        data = request.get_json()
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        update_query = f"""
+        UPDATE `plant_details` 
+        SET 
+            Name = %(Name)s, 
+            Ownership = %(Ownership)s, 
+            Fuel_Type = %(Fuel_Type)s, 
+            Rated_Capacity = %(Rated_Capacity)s, 
+            PAF = %(PAF)s, 
+            PLF = %(PLF)s, 
+            Aux_Consumption = %(Aux_Consumption)s, 
+            Variable_Cost = %(Variable_Cost)s, 
+            Type = %(Type)s, 
+            Technical_Minimum = %(Technical_Minimum)s, 
+            Max_Power = %(Max_Power)s, 
+            Min_Power = %(Min_Power)s
+        WHERE Code = %(Code)s
+        """
+        cursor.execute(update_query, data)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Plant data updated successfully"}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@procurementAPI.route('/<plant_name>', methods=['DELETE'])
+def delete_plant_data(plant_name):
+    """Delete a record for the specified plant."""
+    try:
+        data = request.get_json()
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        delete_query = f"DELETE FROM `plant_details` WHERE Code = %(Code)s"
+        cursor.execute(delete_query, data)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Plant data deleted successfully"}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
