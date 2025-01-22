@@ -196,14 +196,33 @@ def add_plant_data(plant_name):
         return jsonify({"error": str(e)}), 500
 
 
-@procurementAPI.route('/<plant_name>', methods=['PUT'])
-def update_plant_data(plant_name):
+@procurementAPI.route('/<plant_code>', methods=['PUT'])
+def update_plant_data(plant_code):
     """Update existing data for the specified plant."""
     try:
+        # Parse incoming JSON data
         data = request.get_json()
+
+        # Validate required fields in the incoming data
+        required_fields = [
+            "Name", "Code", "Ownership", "Fuel_Type", "Rated_Capacity",
+            "PAF", "PLF", "Aux_Consumption", "Variable_Cost",
+            "Type", "Technical_Minimum", "Max_Power", "Min_Power"
+        ]
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        # Check if the plant code in the URL matches the Code field in the request body
+        if plant_code != data["Code"]:
+            return jsonify({"error": "Plant code mismatch between URL and request body"}), 400
+
+        # Connect to the database
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        update_query = f"""
+
+        # Update query
+        update_query = """
         UPDATE `plant_details` 
         SET 
             Name = %(Name)s, 
@@ -220,15 +239,20 @@ def update_plant_data(plant_name):
             Min_Power = %(Min_Power)s
         WHERE Code = %(Code)s
         """
+        # Execute the query
         cursor.execute(update_query, data)
         conn.commit()
+
+        # Close the database connection
         cursor.close()
         conn.close()
+
         return jsonify({"message": "Plant data updated successfully"}), 200
+
     except mysql.connector.Error as err:
-        return jsonify({"error": str(err)}), 500
+        return jsonify({"error": f"MySQL Error: {str(err)}"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Unexpected Error: {str(e)}"}), 500
 
 
 @procurementAPI.route('/<plant_name>', methods=['DELETE'])
