@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from Routes.demandRoutes import demandApi
+from Routes.iexRoutes import iexApi
 from Routes.procurementRoutes import plantAPI
 from Routes.plantRoutes import procurementAPI
 from Routes.consumerRoutes import consumerAPI
@@ -16,6 +17,8 @@ app.register_blueprint(procurementAPI, url_prefix='/procurement')
 app.register_blueprint(plantAPI, url_prefix='/plant')
 app.register_blueprint(demandApi, url_prefix='/demand')
 app.register_blueprint(consumerAPI, url_prefix='/consumer')
+
+app.register_blueprint(iexApi, url_prefix='/iex')
 
 
 @app.route('/')
