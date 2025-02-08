@@ -17,7 +17,6 @@ app.register_blueprint(procurementAPI, url_prefix='/procurement')
 app.register_blueprint(plantAPI, url_prefix='/plant')
 app.register_blueprint(demandApi, url_prefix='/demand')
 app.register_blueprint(consumerAPI, url_prefix='/consumer')
-
 app.register_blueprint(iexApi, url_prefix='/iex')
 
 
