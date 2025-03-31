@@ -8,10 +8,16 @@ iexApi = Blueprint('iex', __name__)
 # MySQL configuration
 db_config = {
     'user': 'admin',
-    'password': 'Babai123',
-    'host': 'guvnl-dev.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com',
-    'database': 'guvnl_dev'
+    'password': '7%Ky8w@BV!PRYxDw8l',
+    'host': 'public-primary-mysql-inmumbaizone2-189017-1638097.db.onutho.com',
+    'database': 'guvnldev'
 }
+# db_config = {
+#     "host": "localhost",      # Change if using a remote server
+#     "user": "root",           # Change according to your MySQL credentials
+#     "password": "",           # Your MySQL password
+#     "database": "guvnl_dev"  # Replace with your database name
+# }
 
 
 @iexApi.route('/all', methods=['GET'])

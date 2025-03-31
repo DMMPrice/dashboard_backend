@@ -8,11 +8,16 @@ demandApi = Blueprint('demand', __name__)
 # MySQL configuration
 db_config = {
     'user': 'admin',
-    'password': 'Babai123',
-    'host': 'guvnl-dev.cv4e0cyc8rtk.ap-south-1.rds.amazonaws.com',
-    'database': 'guvnl_dev'
+    'password': '7%Ky8w@BV!PRYxDw8l',
+    'host': 'public-primary-mysql-inmumbaizone2-189017-1638097.db.onutho.com',
+    'database': 'guvnldev'
 }
-
+# db_config = {
+#     "host": "localhost",      # Change if using a remote server
+#     "user": "root",           # Change according to your MySQL credentials
+#     "password": "",           # Your MySQL password
+#     "database": "guvnl_dev"  # Replace with your database name
+# }
 
 @demandApi.route('/dashboard', methods=['GET'])
 def get_dashboard_data():
@@ -29,8 +34,8 @@ def get_dashboard_data():
             '''SELECT SUM(`Demand(Actual)`) AS total_demand_actual, SUM(`Demand(Pred)`) AS total_demand_predicted FROM `demand_data`;''')
         demand_data = cursor.fetchone()
 
-        cursor.execute('''SELECT AVG(`Cost_Per_Block`) AS average_pred_price FROM `demand_output`;''')
-        avg_price = cursor.fetchone()
+        # cursor.execute('''SELECT AVG(`Cost_Per_Block`) AS average_pred_price FROM `demand_output`;''')
+        # avg_price = cursor.fetchone()
 
         # Close cursor and connection
         cursor.close()
@@ -41,7 +46,8 @@ def get_dashboard_data():
             return jsonify({"plant_count": plant_count["count"],
                             "demand_actual": round(float(demand_data['total_demand_actual']), 3),
                             "demand_predicted": round(float(demand_data['total_demand_predicted']), 3),
-                            "avg_price": round(float(avg_price['average_pred_price']), 2)},
+                            # "avg_price": round(float(avg_price['average_pred_price']), 2)},
+                            "avg_price": round(float(4.0), 2)},
                            ), 200
         else:
             return jsonify({"error": "No data found"}), 404
