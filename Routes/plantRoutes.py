@@ -7,9 +7,9 @@ procurementAPI = Blueprint('procurement', __name__)
 
 # MySQL configuration
 db_config = {
-    'user': 'admin',
-    'password': '7%Ky8w@BV!PRYxDw8l',
-    'host': 'public-primary-mysql-inmumbaizone2-189017-1638097.db.onutho.com',
+    'user': 'DB-Admin',
+    'password': 'DBTest@123',
+    'host': '69.62.74.149',
     'database': 'guvnldev'
 }
 # db_config = {
