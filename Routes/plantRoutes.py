@@ -12,6 +12,8 @@ db_config = {
     'host': '69.62.74.149',
     'database': 'guvnldev'
 }
+
+
 # db_config = {
 #     "host": "localhost",      # Change if using a remote server
 #     "user": "root",           # Change according to your MySQL credentials
