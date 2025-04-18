@@ -51,7 +51,6 @@ def get_dashboard_data():
                             "demand_actual": round(float(demand_data['total_demand_actual']), 3),
                             "demand_predicted": round(float(demand_data['total_demand_predicted']), 3),
                             "avg_price": round(float(avg_price['average_pred_price']), 2)},
-                           # "avg_price": round(float(4.0), 2)},
                            ), 200
         else:
             return jsonify({"error": "No data found"}), 404

@@ -322,3 +322,4 @@ def delete_plant_data():
         return jsonify({"error": str(err)}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+

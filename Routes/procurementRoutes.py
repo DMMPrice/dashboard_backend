@@ -280,9 +280,11 @@ def get_demand():
         rem_plants = other['other_plant_data']
         rem_cost = other['total_cost']
         rem_gen = sum(p['generated_energy'] for p in rem_plants)
-        last_price = round(rem_plants[-1]['Variable_Cost'], 2) if rem_plants else round(
-            must['plant_data'][-1]['Variable_Cost'], 2)
+        last_price = max(round(rem_plants[-1]['Variable_Cost'], 2), iex_cost)
         cost_per_block = round((must['total_cost'] + iex_cost + rem_cost) / pred_banked, 2) if pred_banked else 0.0
+        backdown_cost = 0
+        for plant in rem_plants:
+            backdown_cost += plant['backdown_cost']
         result = OrderedDict({
             'TimeStamp': demand_row['TimeStamp'],
             'Demand(Actual)': actual_kwh,
@@ -299,7 +301,8 @@ def get_demand():
             'Remaining_Plants_Total_Gen': rem_gen,
             'Remaining_Plants_Total_Cost': rem_cost,
             'Last_Price': last_price,
-            'Cost_Per_Block': cost_per_block
+            'Cost_Per_Block': cost_per_block,
+            'Backdown_Cost': round(backdown_cost, 2),
         })
         cursor.close()
         conn.close()
