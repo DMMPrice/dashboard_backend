@@ -5,7 +5,7 @@ from datetime import datetime
 from collections import OrderedDict
 
 # ----------------------------- Blueprint Setup -----------------------------
-plantAPI = Blueprint('plant', __name__)
+procurementAPI = Blueprint('procurement', __name__)
 
 # -------------------------- Database Configuration --------------------------
 db_config = {
@@ -237,7 +237,7 @@ def get_other_run(net_demand: float, timestamp: str) -> Dict[str, Any]:
     return allocate_generation(plants, float(net_demand), backdown_table)
 
 
-@plantAPI.route('/', methods=['GET'])
+@procurementAPI.route('/', methods=['GET'])
 def get_demand():
     start_date = request.args.get('start_date')
     price_cap = request.args.get('price_cap', 0)
