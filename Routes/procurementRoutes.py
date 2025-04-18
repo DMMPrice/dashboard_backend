@@ -1,489 +1,313 @@
 from flask import Blueprint, jsonify, request
 import mysql.connector
-import concurrent.futures
 from typing import List, Dict, Any, Union
 from datetime import datetime
-import pprint
+from collections import OrderedDict
 
 # ----------------------------- Blueprint Setup -----------------------------
-
-# Create a Flask Blueprint named 'plant' to modularize the API routes
 plantAPI = Blueprint('plant', __name__)
 
 # -------------------------- Database Configuration --------------------------
-
-# MySQL database connection configuration
 db_config = {
     'user': 'DB-Admin',
     'password': 'DBTest@123',
     'host': '69.62.74.149',
     'database': 'guvnldev'
 }
-# db_config = {
-#     "host": "localhost",  # Change if using a remote server
-#     "user": "root",  # Change according to your MySQL credentials
-#     "password": "",  # Your MySQL password
-#     "database": "guvnl_dev"  # Replace with your database name
-# }
 
 
 # ----------------------------- Helper Functions -----------------------------
 
 def map_and_calculate(alloc: Dict[str, Any], plant_dict: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Maps a single allocation to plant data and calculates the Plant Load Factor (plf) and Net Cost.
+    Maps a single allocation to plant data and calculates PLF and Net Cost.
     """
     plant_code = alloc['plant_code']
-    allocated_gen = alloc['allocated_gen']
-    min_gen = alloc['min_gen']
-    max_gen = alloc['max_gen']
-
+    allocated = alloc['allocated_gen']
     plant = plant_dict.get(plant_code, {})
-    plant_name = plant.get('name', 'Unknown Plant')
-    rated_capacity = plant.get('Rated_Capacity', 0.0)
+
+    rated = plant.get('Rated_Capacity', 0.0)
     paf = plant.get('PAF', 0.0)
-    aux_consumption = plant.get('Aux_Consumption', 0.0)
-    variable_cost = plant.get('Variable_Cost', 0.0)
+    aux = plant.get('Aux_Consumption', 0.0)
+    var_cost = plant.get('Variable_Cost', 0.0)
 
-    denominator = rated_capacity * 1000 * 0.25 * paf * (1 - aux_consumption)
-    plf = allocated_gen / denominator if denominator != 0 else 0.0
-
-    net_cost = allocated_gen * variable_cost
+    denom = rated * 1000 * 0.25 * paf * (1 - aux) or 1.0
+    plf = allocated / denom
+    net_cost = allocated * var_cost
 
     return {
-        'plant_name': plant_name,
+        'plant_name': plant.get('name', 'Unknown'),
         'plant_code': plant_code,
-        'rated_capacity': rated_capacity,
+        'rated_capacity': rated,
         'paf': paf,
-        'Aux_Consumption': aux_consumption,
+        'Aux_Consumption': aux,
         'plf': plf,
-        'Variable_Cost': variable_cost,
-        'max_power': max_gen,
-        'min_power': min_gen,
-        'generated_energy': allocated_gen,
+        'Variable_Cost': var_cost,
+        'max_power': alloc['max_gen'],
+        'min_power': alloc['min_gen'],
+        'generated_energy': allocated,
         'net_cost': net_cost
     }
 
 
-def allocate_generation(plants: List[Dict[str, Any]], net_demand: float) -> Dict[str, Union[float, List[Any]]]:
-    """
-    Allocates energy generation to plants based on their Variable Cost,
-    ensuring each plant meets its Minimum Power.
-    Utilizes parallel processing to calculate detailed allocation metrics.
-    """
+def allocate_generation(
+        plants: List[Dict[str, Any]],
+        net_demand: float,
+        backdown_table: List[Dict[str, float]]
+) -> Dict[str, Union[float, List[Any]]]:
     if net_demand <= 0:
         raise ValueError("Net demand must be greater than zero")
-
-    sorted_plants = plants
+    sorted_plants = sorted(plants, key=lambda p: p['Variable_Cost'])
     allocation = []
-    total_allocated = 0.0
-
-    # Modified Allocation Loop: If remaining demand is less than the plant's Max_Power,
-    # allocate only the remaining demand.
+    total_alloc = 0.0
     for plant in sorted_plants:
-        plant_code = plant['Code']
-        max_power = plant['Max_Power']
-        min_power = plant['Min_Power']
-
-        if max_power == 0:
+        code = plant['Code']
+        max_p = plant['Max_Power']
+        min_p = plant['Min_Power']
+        if max_p <= 0:
             continue
-
-        remaining_demand = net_demand - total_allocated
-        if remaining_demand <= max_power:
-            allocated_gen = remaining_demand
-            allocation.append({
-                'plant_code': plant_code,
-                'allocated_gen': allocated_gen,
-                'min_gen': min_power,
-                'max_gen': max_power,
-                'Type': plant['Type']
-            })
-            total_allocated += allocated_gen
-            break  # Demand met—exit loop
-        else:
-            allocated_gen = max_power
-            allocation.append({
-                'plant_code': plant_code,
-                'allocated_gen': allocated_gen,
-                'min_gen': min_power,
-                'max_gen': max_power,
-                'Type': plant['Type']
-            })
-            total_allocated += allocated_gen
-
-    # Backward Adjustment to eliminate any excess generation
-    excess_generation = total_allocated - net_demand
-    if excess_generation > 0:
-        for i in reversed(range(len(allocation))):
-            plant_allocation = allocation[i]
-            allocated_gen = plant_allocation['allocated_gen']
-            min_gen = plant_allocation['min_gen']
-            possible_reduction = allocated_gen - min_gen
-            reduction = min(possible_reduction, excess_generation)
-            if reduction > 0:
-                allocation[i]['allocated_gen'] -= reduction
-                excess_generation -= reduction
-            if excess_generation <= 0:
+        rem = net_demand - total_alloc
+        if rem <= 0:
+            break
+        if rem <= max_p:
+            alloc_val = max(min_p, rem)
+            allocation.append(
+                {'plant_code': code, 'allocated_gen': alloc_val,
+                 'min_gen': min_p, 'max_gen': max_p, 'Type': plant['Type']}
+            )
+            total_alloc += alloc_val
+            break
+        allocation.append(
+            {'plant_code': code, 'allocated_gen': max_p,
+             'min_gen': min_p, 'max_gen': max_p, 'Type': plant['Type']}
+        )
+        total_alloc += max_p
+    excess = total_alloc - net_demand
+    if excess > 0:
+        for alloc in reversed(allocation):
+            reducible = alloc['allocated_gen'] - alloc['min_gen']
+            if reducible <= 0:
+                continue
+            red = min(reducible, excess)
+            alloc['allocated_gen'] -= red
+            excess -= red
+            if excess <= 0:
                 break
-
-    plant_dict = {plant['Code']: plant for plant in plants}
-    final_allocation = []
+    plant_dict = {p['Code']: p for p in plants}
+    final_list = []
     total_cost = 0.0
-
-    try:
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            futures = [
-                executor.submit(map_and_calculate, alloc, plant_dict)
-                for alloc in allocation
-            ]
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    result = future.result()
-                    final_allocation.append(result)
-                    total_cost += result['net_cost']
-                except Exception as e:
-                    print(f"Error processing allocation: {e}")
-    except Exception as e:
-        print(f"Parallel processing failed: {e}")
-        raise RuntimeError("Allocation failed due to parallel processing error") from e
-
-    final_allocation.sort(key=lambda x: x['Variable_Cost'])
-    return {"other_plant_data": final_allocation, "total_cost": total_cost}
+    for alloc in allocation:
+        base = map_and_calculate(alloc, plant_dict)
+        plf_pct = base['plf'] * 100
+        SHR = Aux = 0.0
+        for row in backdown_table:
+            if row['lower'] <= plf_pct <= row['upper']:
+                SHR = row['SHR']
+                Aux = row['Aux_Consumption']
+                break
+        var_cost = base['Variable_Cost']
+        max_gen = base['max_power']
+        gen = base['generated_energy']
+        backdown_rate = round(var_cost * ((1 + SHR / 100) / (1 - Aux / 100)), 2)
+        backdown_cost = round(backdown_rate * (max_gen - gen), 2)
+        base['backdown_rate'] = backdown_rate
+        base['backdown_cost'] = backdown_cost
+        final_list.append(base)
+        total_cost += base['net_cost']
+    final_list.sort(key=lambda x: x['Variable_Cost'])
+    return {"other_plant_data": final_list, "total_cost": total_cost}
 
 
 def get_must_run(net_demand: float, timestamp: str) -> Dict[str, Any]:
-    """
-    Retrieves and processes data for "Must Run" plants,
-    calculating total generated energy and total cost.
-    """
     if not net_demand:
         return {"error": "Net demand parameters are required"}
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-
-        sum_query = (
-            "SELECT `name`, `Code`, `Rated_Capacity`, `PAF`, `PLF`, `Type`, "
-            "`Technical_Minimum`, `Aux_Consumption`, `Variable_Cost`, `Max_Power`, `Min_Power` "
-            "FROM `plant_details` WHERE `Type` = 'Must run' ORDER BY `Variable_Cost`"
+        # Fetch must-run plant details
+        cursor.execute(
+            """
+            SELECT name,
+                   Code,
+                   Rated_Capacity,
+                   PAF,
+                   PLF,
+                   Type,
+                   Technical_Minimum,
+                   Aux_Consumption,
+                   Variable_Cost,
+                   Max_Power,
+                   Min_Power
+            FROM plant_details
+            WHERE Type = 'Must run'
+            ORDER BY Variable_Cost
+            """
         )
-        cursor.execute(sum_query)
-        sum_result = cursor.fetchall()
-
-        generated_energy_all = 0.0
-        total_cost = 0.0
-        plant_data = []
-
-        for plant in sum_result:
+        plants = cursor.fetchall()
+        gen_all = 0.0
+        cost_all = 0.0
+        data = []
+        for plant in plants:
             code = plant['Code']
+            # Use LIMIT 1 to avoid unread-result errors
             try:
-                plant_query = f"SELECT `TimeStamp`, `Pred` FROM `{code}` WHERE `TimeStamp` = %s"
-                cursor.execute(plant_query, (timestamp,))
-                plant_result = cursor.fetchall()
-                if not plant_result:
-                    plant_result = [{"TimeStamp": timestamp, "Pred": 0.00}]
+                cursor.execute(
+                    f"SELECT Pred FROM `{code}` WHERE TimeStamp = %s LIMIT 1",
+                    (timestamp,)
+                )
+                pred_row = cursor.fetchone() or {'Pred': 0.0}
             except mysql.connector.Error:
-                plant_result = [{"TimeStamp": timestamp, "Pred": 0.00}]
-
-            generated_energy = round(float(plant_result[0]['Pred']) * 1000 * 0.25, 3)
-            generated_energy_all += generated_energy
-
-            variable_cost = float(plant['Variable_Cost'])
-            total_cost += round(generated_energy * variable_cost, 2)
-
-            plant_data.append({
-                "plant_name": plant['name'],
-                "plant_code": plant['Code'],
-                "Rated_Capacity": plant['Rated_Capacity'],
-                "PAF": plant['PAF'],
-                "PLF": plant['PLF'],
-                "Type": plant['Type'],
-                "Technical_Minimum": plant['Technical_Minimum'],
-                "Aux_Consumption": plant['Aux_Consumption'],
-                "Variable_Cost": variable_cost,
-                "generated_energy": generated_energy,
-                "max_power": plant['Max_Power'],
-                "min_power": plant['Min_Power'],
-                "net_cost": round(generated_energy * variable_cost, 2)
+                pred_row = {'Pred': 0.0}
+            gen_kwh = round(float(pred_row['Pred']) * 1000 * 0.25, 3)
+            gen_all += gen_kwh
+            var_cost = float(plant['Variable_Cost'])
+            cost_all += round(gen_kwh * var_cost, 2)
+            data.append({
+                'plant_name': plant['name'],
+                'plant_code': code,
+                'Rated_Capacity': plant['Rated_Capacity'],
+                'PAF': plant['PAF'],
+                'PLF': plant['PLF'],
+                'Type': plant['Type'],
+                'Aux_Consumption': plant['Aux_Consumption'],
+                'Variable_Cost': var_cost,
+                'generated_energy': gen_kwh,
+                'max_power': plant['Max_Power'],
+                'min_power': plant['Min_Power'],
+                'net_cost': round(gen_kwh * var_cost, 2)
             })
-
         cursor.close()
         conn.close()
-
-        return {
-            "plant_data": plant_data,
-            "generated_energy_all": generated_energy_all,
-            "total_cost": total_cost
-        }
+        return {'plant_data': data, 'generated_energy_all': gen_all, 'total_cost': cost_all}
     except Exception as e:
-        return {"error": str(e)}
+        return {'error': str(e)}
 
 
 def get_exchange_data(timestamp: str, cap_price: float) -> Union[List[Dict[str, Any]], Dict[str, str]]:
-    """
-    Fetches and processes IEX (Independent Electricity Exchange) data for a given timestamp.
-    Adjusts Pred_Price based on a price cap and converts Qty_Pred to kWh.
-    """
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-
-        sum_query = (
-            "SELECT `TimeStamp`, `Pred_Price`, `Qty_Pred` "
-            "FROM `iex_data` WHERE `TimeStamp` = %s"
+        cursor.execute(
+            "SELECT `TimeStamp`, `Pred_Price`, `Qty_Pred` FROM iex_data WHERE TimeStamp = %s",
+            (timestamp,)
         )
-        cursor.execute(sum_query, (timestamp,))
-        sum_result = cursor.fetchall()
-
-        for i in range(len(sum_result)):
-            if sum_result[i]['Pred_Price'] > float(cap_price):
-                sum_result[i]['Pred_Price'] = 0.0
+        rows = cursor.fetchall()
+        for r in rows:
+            if r['Pred_Price'] > float(cap_price):
+                r['Pred_Price'] = 0.0
             else:
-                sum_result[i]['Qty_Pred'] = round(
-                    sum_result[i]['Qty_Pred'] * 1000 * 0.25,
-                    3
-                )
-
+                r['Qty_Pred'] = round(r['Qty_Pred'] * 1000 * 0.25, 3)
         cursor.close()
         conn.close()
-
-        return sum_result
+        return rows
     except mysql.connector.Error as err:
-        return {"error": str(err)}
+        return {'error': str(err)}
     except Exception as e:
-        return {"error": str(e)}
-
-
-def get_valid_plants(plants: List[Dict[str, Any]], db_config: Dict[str, str], user_timestamp: datetime, cursor) -> List[
-    Dict[str, Any]]:
-    """
-    Checks each plant's table for data availability at the specified timestamp.
-    """
-    valid_plants = []
-
-    for plant in plants:
-        plant_code = plant["Code"]
-
-        check_table_query = (
-            "SELECT COUNT(*) as table_count "
-            "FROM information_schema.tables "
-            "WHERE table_schema = %s AND table_name = %s"
-        )
-        cursor.execute(check_table_query, (db_config["database"], plant_code))
-        table_exists = cursor.fetchone()["table_count"] > 0
-
-        if table_exists:
-            data_query = (
-                f"SELECT * FROM {plant_code} "
-                "WHERE TimeStamp = %s LIMIT 1"
-            )
-            cursor.execute(data_query, (user_timestamp,))
-            plant_data = cursor.fetchall()
-            if plant_data and plant_data[0]["Actual"] > 0:
-                plant["PAF"] = 1
-                valid_plants.append(plant)
-    return valid_plants
+        return {'error': str(e)}
 
 
 def get_other_run(net_demand: float, timestamp: str) -> Dict[str, Any]:
-    """
-    Retrieves and allocates energy generation for "Other" type plants based on net demand.
-    Only considers plants whose monthly PAF column (Jan, Feb, Mar, etc.) is 'Y' for the given timestamp.
-    """
-    from datetime import datetime
+    if net_demand is None or float(net_demand) <= 0:
+        return {'error': 'Net demand must be greater than zero'}
+    dt = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    month_map = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+                 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
+    col = month_map[dt.month]
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(f"""
+        SELECT pd.name, pd.Code, pd.Rated_Capacity, pd.PAF, pd.PLF, pd.Type,
+               pd.Technical_Minimum, pd.Aux_Consumption, pd.Variable_Cost,
+               pd.Max_Power, pd.Min_Power
+        FROM plant_details pd
+        JOIN PAF_Details pfd ON pd.Code=pfd.Code
+        WHERE pd.Type='Other' AND pfd.`{col}`='Y'
+        ORDER BY pd.Variable_Cost ASC
+    """)
+    plants = cursor.fetchall()
+    cursor.execute(
+        "SELECT Start_Load, End_Load, SHR, Aux_Consumption FROM Back_Down_Table"
+    )
+    bd_rows = cursor.fetchall()
+    backdown_table = [
+        {'lower': r['Start_Load'], 'upper': r['End_Load'], 'SHR': r['SHR'], 'Aux_Consumption': r['Aux_Consumption']} for
+        r in bd_rows]
+    cursor.close()
+    conn.close()
+    return allocate_generation(plants, float(net_demand), backdown_table)
 
-    # Convert timestamp string to a datetime object
-    dt_obj = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-
-    if not net_demand:
-        return {"error": "Net demand parameter is required"}
-
-    try:
-        net_demand = float(net_demand)
-        if net_demand <= 0:
-            return {"error": "Net demand must be greater than zero"}
-
-        # Open a database connection
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
-        # 1) Determine the correct monthly column based on the timestamp's month
-        month_val = dt_obj.month
-
-        # Map the month integer to the corresponding column in PAF_Details
-        month_map = {
-            1: "Jan",
-            2: "Feb",
-            3: "Mar",
-            4: "Apr",
-            5: "May",
-            6: "Jun",
-            7: "Jul",
-            8: "Aug",
-            9: "Sep",
-            10: "Oct",
-            11: "Nov",
-            12: "Dec"
-        }
-        paf_column = month_map.get(month_val, "Jan")  # Fallback to "Jan" if needed
-        # print(paf_column)
-
-        # 2) Dynamically build your query to select only rows where the monthly PAF column is 'Y'
-        #    We are no longer selecting the monthly PAF column in the output.
-        query = f"""
-            SELECT 
-                pd.name,
-                pd.Code,
-                pd.Rated_Capacity,
-                pd.PAF,
-                pd.PLF,
-                pd.Type,
-                pd.Technical_Minimum,
-                pd.Aux_Consumption,
-                pd.Variable_Cost,
-                pd.Max_Power,
-                pd.Min_Power
-            FROM plant_details pd
-            JOIN PAF_Details pfd 
-                ON pd.Code = pfd.Code
-            WHERE pd.Type = 'Other'
-              AND pfd.`{paf_column}` = 'Y'
-            ORDER BY pd.Variable_Cost ASC
-        """
-
-        # 3) Execute the query to get only those plants whose monthly PAF is 'Y'
-        cursor.execute(query)
-        plants = cursor.fetchall()
-        # print(plants)
-
-        # # 4) Filter out plants that do not have valid data at this timestamp
-        # valid_plants = get_valid_plants(plants, db_config, dt_obj, cursor)
-
-        # 5) Allocate generation among these valid plants
-        # generation = allocate_generation(valid_plants, net_demand)
-        generation = allocate_generation(plants, net_demand)
-
-        # Close the cursor and connection
-        cursor.close()
-        conn.close()
-
-        return generation
-
-    except Exception as e:
-        return {"error": str(e)}
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
-
-
-# ------------------------------ API Routes ----------------------------------
 
 @plantAPI.route('/', methods=['GET'])
 def get_demand():
-    """
-    Flask route to handle GET requests for demand data and allocation.
-    """
     start_date = request.args.get('start_date')
-    start_date = start_date[:19]
-    price_cap = request.args.get('price_cap')
-
+    price_cap = request.args.get('price_cap', 0)
     if not start_date:
-        return jsonify({"error": "Start date parameter is required"}), 400
-
+        return jsonify({'error': 'Start date parameter is required'}), 400
+    start_date = start_date[:19]
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-
-        sum_query = "SELECT * FROM demand_data WHERE `TimeStamp` BETWEEN %s AND %s"
-        cursor.execute(sum_query, (start_date, start_date))
-        sum_result = cursor.fetchall()
-
-        sum_query_1 = "SELECT * FROM Banking_Data WHERE `TimeStamp` BETWEEN %s AND %s"
-        cursor.execute(sum_query_1, (start_date, start_date))
-        sum_result_1 = cursor.fetchall()
-        banking_unit = sum_result_1[0]["Banking_Unit"]
-        # print(banking_unit)
-
-        if not sum_result:
-            return jsonify({"error": "No demand data found for the given date"}), 404
-
-        demand_results = []
-        for demand in sum_result:
-            actual_converted = round(float(demand['Demand(Actual)']) * 1000 * 0.25, 3)
-            pred_converted = round(float(demand['Demand(Pred)']) * 1000 * 0.25, 3)
-            pred_converted_banked = round(float(pred_converted+banking_unit), 3)
-            # print(pred_converted_banked)
-            # print(demand['TimeStamp'])
-
-            must_run_data = get_must_run(pred_converted, demand['TimeStamp'])
-            if "error" in must_run_data:
-                return jsonify({"error": must_run_data["error"]}), 500
-
-            # print(must_run_data)
-            must_run_total_gen = must_run_data['generated_energy_all']
-            must_run_plants = must_run_data['plant_data']
-            # print("Must Run Energy: ", must_run_total_gen)
-
-            iex_data_list = get_exchange_data(demand['TimeStamp'], price_cap)
-            if isinstance(iex_data_list, dict) and "error" in iex_data_list:
-                return jsonify({"error": iex_data_list["error"]}), 500
-
-            if not iex_data_list:
-                iex_data_list = [{"TimeStamp": demand['TimeStamp'], "Pred_Price": 0.0, "Qty_Pred": 0.0}]
-            iex_data = iex_data_list[0]
-
-            if iex_data["Pred_Price"] != 0:
-                iex_cost = iex_data["Pred_Price"] * iex_data["Qty_Pred"]
-                iex_gen = iex_data["Qty_Pred"]
-            else:
-                iex_cost = 0.0
-                iex_gen = 0.0
-
-            net_demand = pred_converted - float(must_run_total_gen)
-            # print("Net demand after must run", net_demand)
-            net_demand_2 = net_demand - iex_gen
-            # print("Net demand after iex", net_demand_2)
-
-            remaining_plants_data = get_other_run(net_demand_2, start_date)
-
-            if remaining_plants_data.get('other_plant_data'):
-                last_price = round(float(remaining_plants_data['other_plant_data'][-1]['Variable_Cost']), 2)
-            else:
-                last_price = round(must_run_plants[-1]['Variable_Cost'], 2)
-
-            single_demand = {
-                "TimeStamp": demand['TimeStamp'],
-                "Demand(Actual)": actual_converted,
-                "Demand(Pred)": pred_converted,
-                "Must_Run": must_run_plants,
-                "Must_Run_Total_Gen": must_run_total_gen,
-                "Must_Run_Total_Cost": must_run_data['total_cost'],
-                "IEX_Data": iex_data,
-                "IEX_Cost": iex_cost,
-                "Remaining_Plants": remaining_plants_data.get('other_plant_data', []),
-                "Remaining_Plants_Total_Cost": remaining_plants_data.get('total_cost', 0.0),
-                "Last_Price": last_price,
-                "Cost_Per_Block": round(
-                    (must_run_data['total_cost'] + iex_cost + remaining_plants_data.get('total_cost',
-                                                                                        0.0)) / pred_converted,
-                    2
-                ) if pred_converted != 0 else 0.0
-            }
-
-            demand_results.append(single_demand)
-
+        # Escape parentheses in column names
+        cursor.execute(
+            "SELECT `Demand(Actual)`, `Demand(Pred)`, `TimeStamp` "
+            "FROM demand_data WHERE `TimeStamp` BETWEEN %s AND %s",
+            (start_date, start_date)
+        )
+        demand_row = cursor.fetchone()
+        cursor.execute(
+            "SELECT Banking_Unit FROM Banking_Data WHERE `TimeStamp` BETWEEN %s AND %s",
+            (start_date, start_date)
+        )
+        bank_row = cursor.fetchone() or {'Banking_Unit': 0}
+        if not demand_row:
+            return jsonify({'error': 'No demand data found for the given date'}), 404
+        actual_kwh = round(float(demand_row['Demand(Actual)']) * 1000 * 0.25, 3)
+        pred_kwh = round(float(demand_row['Demand(Pred)']) * 1000 * 0.25, 3)
+        banking_unit = bank_row.get('Banking_Unit', 0) or 0
+        pred_banked = pred_kwh + banking_unit
+        must = get_must_run(pred_banked, demand_row['TimeStamp'])
+        if 'error' in must: return jsonify({'error': must['error']}), 500
+        iex_list = get_exchange_data(demand_row['TimeStamp'], price_cap)
+        if isinstance(iex_list, dict) and 'error' in iex_list:
+            return jsonify({'error': iex_list['error']}), 500
+        iex = iex_list[0] if iex_list else {'Pred_Price': 0.0, 'Qty_Pred': 0.0}
+        iex_cost = iex['Pred_Price'] * iex['Qty_Pred'] if iex['Pred_Price'] else 0.0
+        iex_gen = iex['Qty_Pred'] if iex['Pred_Price'] else 0.0
+        net1 = pred_banked - must['generated_energy_all']
+        net2 = net1 - iex_gen
+        other = get_other_run(net2, start_date)
+        if 'error' in other: return jsonify({'error': other['error']}), 500
+        rem_plants = other['other_plant_data']
+        rem_cost = other['total_cost']
+        rem_gen = sum(p['generated_energy'] for p in rem_plants)
+        last_price = round(rem_plants[-1]['Variable_Cost'], 2) if rem_plants else round(
+            must['plant_data'][-1]['Variable_Cost'], 2)
+        cost_per_block = round((must['total_cost'] + iex_cost + rem_cost) / pred_banked, 2) if pred_banked else 0.0
+        result = OrderedDict({
+            'TimeStamp': demand_row['TimeStamp'],
+            'Demand(Actual)': actual_kwh,
+            'Demand(Pred)': pred_kwh,
+            'Banking_Unit': banking_unit,
+            'Demand_Banked': pred_banked,
+            'Must_Run': must['plant_data'],
+            'Must_Run_Total_Gen': must['generated_energy_all'],
+            'Must_Run_Total_Cost': must['total_cost'],
+            'IEX_Data': iex,
+            'IEX_Gen': iex_gen,
+            'IEX_Cost': iex_cost,
+            'Remaining_Plants': rem_plants,
+            'Remaining_Plants_Total_Gen': rem_gen,
+            'Remaining_Plants_Total_Cost': rem_cost,
+            'Last_Price': last_price,
+            'Cost_Per_Block': cost_per_block
+        })
         cursor.close()
         conn.close()
-
-        return jsonify(demand_results[0]), 200
+        return jsonify(result), 200
     except mysql.connector.Error as err:
-        return jsonify({"error": str(err)}), 500
+        return jsonify({'error': str(err)}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
     finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
+        if 'cursor' in locals(): cursor.close()
+        if 'conn' in locals(): conn.close()
