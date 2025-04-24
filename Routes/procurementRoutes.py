@@ -39,14 +39,14 @@ def map_and_calculate(alloc: Dict[str, Any], plant_dict: Dict[str, Dict[str, Any
         'plant_name': plant.get('name', 'Unknown'),
         'plant_code': plant_code,
         'rated_capacity': rated,
-        'paf': paf,
+        'paf': round(paf, 2),
         'Aux_Consumption': aux,
-        'plf': plf,
+        'plf': round(plf, 4),
         'Variable_Cost': var_cost,
-        'max_power': alloc['max_gen'],
-        'min_power': alloc['min_gen'],
-        'generated_energy': allocated,
-        'net_cost': net_cost
+        'max_power': round(alloc['max_gen'], 3),
+        'min_power': round(alloc['min_gen'], 3),
+        'generated_energy': round(allocated, 3),
+        'net_cost': round(net_cost, 2)
     }
 
 
@@ -322,13 +322,13 @@ def get_demand():
             'Must_Run_Total_Gen': must['generated_energy_all'],
             'Must_Run_Total_Cost': must['total_cost'],
             'IEX_Data': iex,
-            'IEX_Gen': iex_gen,
-            'IEX_Cost': iex_cost,
+            'IEX_Gen': round(iex_gen, 3),
+            'IEX_Cost': round(iex_cost, 2),
             'Remaining_Plants': rem_plants,
-            'Remaining_Plants_Total_Gen': rem_gen,
-            'Remaining_Plants_Total_Cost': rem_cost,
-            'Last_Price': last_price,
-            'Cost_Per_Block': cost_per_block,
+            'Remaining_Plants_Total_Gen': round(rem_gen, 3),
+            'Remaining_Plants_Total_Cost': round(rem_cost, 2),
+            'Last_Price': round(last_price, 2),
+            'Cost_Per_Block': round(cost_per_block, 2),
             'Backdown_Cost': round(total_backdown, 2),
         })
 
