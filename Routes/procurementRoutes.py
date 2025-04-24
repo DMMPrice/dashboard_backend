@@ -241,50 +241,77 @@ def get_other_run(net_demand: float, timestamp: str) -> Dict[str, Any]:
 def get_demand():
     start_date = request.args.get('start_date')
     price_cap = request.args.get('price_cap', 0)
+
     if not start_date:
         return jsonify({'error': 'Start date parameter is required'}), 400
     start_date = start_date[:19]
+
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        # Escape parentheses in column names
+
+        # fetch demand
         cursor.execute(
             "SELECT `Demand(Actual)`, `Demand(Pred)`, `TimeStamp` "
             "FROM demand_data WHERE `TimeStamp` BETWEEN %s AND %s",
             (start_date, start_date)
         )
         demand_row = cursor.fetchone()
+
+        # fetch banking
         cursor.execute(
             "SELECT Banking_Unit FROM Banking_Data WHERE `TimeStamp` BETWEEN %s AND %s",
             (start_date, start_date)
         )
         bank_row = cursor.fetchone() or {'Banking_Unit': 0}
+        banking_unit = bank_row.get('Banking_Unit', 0) or 0
+
         if not demand_row:
             return jsonify({'error': 'No demand data found for the given date'}), 404
+
+        # convert to kWh
         actual_kwh = round(float(demand_row['Demand(Actual)']) * 1000 * 0.25, 3)
         pred_kwh = round(float(demand_row['Demand(Pred)']) * 1000 * 0.25, 3)
-        banking_unit = bank_row.get('Banking_Unit', 0) or 0
         pred_banked = pred_kwh + banking_unit
+
+        # must-run
         must = get_must_run(pred_banked, demand_row['TimeStamp'])
-        if 'error' in must: return jsonify({'error': must['error']}), 500
+        if 'error' in must:
+            return jsonify({'error': must['error']}), 500
+
+        # IEX
         iex_list = get_exchange_data(demand_row['TimeStamp'], price_cap)
         if isinstance(iex_list, dict) and 'error' in iex_list:
             return jsonify({'error': iex_list['error']}), 500
         iex = iex_list[0] if iex_list else {'Pred_Price': 0.0, 'Qty_Pred': 0.0}
         iex_cost = iex['Pred_Price'] * iex['Qty_Pred'] if iex['Pred_Price'] else 0.0
         iex_gen = iex['Qty_Pred'] if iex['Pred_Price'] else 0.0
+
+        # remaining
         net1 = pred_banked - must['generated_energy_all']
         net2 = net1 - iex_gen
         other = get_other_run(net2, start_date)
-        if 'error' in other: return jsonify({'error': other['error']}), 500
+        if 'error' in other:
+            return jsonify({'error': other['error']}), 500
+
         rem_plants = other['other_plant_data']
         rem_cost = other['total_cost']
         rem_gen = sum(p['generated_energy'] for p in rem_plants)
-        last_price = max(round(rem_plants[-1]['Variable_Cost'], 2), iex_cost)
+
+        # ─────────────── BANKING‐CHECK FOR BACKDOWN ───────────────
+        if banking_unit == 0:
+            # zero out each plant’s backdown_cost
+            for p in rem_plants:
+                p['backdown_cost'] = 0.0
+            total_backdown = 0.0
+        else:
+            # sum up precomputed backdown_costs
+            total_backdown = sum(p['backdown_cost'] for p in rem_plants)
+        # ────────────────────────────────────────────────────────────
+
+        last_price = max(round(rem_plants[-1]['Variable_Cost'], 2), iex['Pred_Price'])
         cost_per_block = round((must['total_cost'] + iex_cost + rem_cost) / pred_banked, 2) if pred_banked else 0.0
-        backdown_cost = 0
-        for plant in rem_plants:
-            backdown_cost += plant['backdown_cost']
+
         result = OrderedDict({
             'TimeStamp': demand_row['TimeStamp'],
             'Demand(Actual)': actual_kwh,
@@ -302,11 +329,13 @@ def get_demand():
             'Remaining_Plants_Total_Cost': rem_cost,
             'Last_Price': last_price,
             'Cost_Per_Block': cost_per_block,
-            'Backdown_Cost': round(backdown_cost, 2),
+            'Backdown_Cost': round(total_backdown, 2),
         })
+
         cursor.close()
         conn.close()
         return jsonify(result), 200
+
     except mysql.connector.Error as err:
         return jsonify({'error': str(err)}), 500
     except Exception as e:
