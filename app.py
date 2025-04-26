@@ -4,7 +4,7 @@ from Routes.demandRoutes import demandApi
 from Routes.iexRoutes import iexApi
 from Routes.procurementRoutes import procurementAPI
 from Routes.plantRoutes import plantAPI
-from Routes.consumerRoutes import consumerAPI
+from Routes.BankingRoutes import bankingAPI
 from Routes.availibilityfactorRoutes import availabilityAPI
 
 app = Flask(__name__)
@@ -14,7 +14,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes and
 app.register_blueprint(procurementAPI, url_prefix='/procurement')
 app.register_blueprint(plantAPI, url_prefix='/plant')
 app.register_blueprint(demandApi, url_prefix='/demand')
-app.register_blueprint(consumerAPI, url_prefix='/consumer')
+app.register_blueprint(bankingAPI, url_prefix='/banking')
 app.register_blueprint(iexApi, url_prefix='/iex')
 app.register_blueprint(availabilityAPI, url_prefix='/availability')
 
