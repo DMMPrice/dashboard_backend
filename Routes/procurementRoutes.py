@@ -308,8 +308,8 @@ def get_demand():
             # sum up precomputed backdown_costs
             total_backdown = sum(p['backdown_cost'] for p in rem_plants)
         # ────────────────────────────────────────────────────────────
-
-        last_price = max(round(rem_plants[-1]['Variable_Cost'], 2), iex['Pred_Price'])
+        iex_price = iex['Pred_Price'] if iex['Qty_Pred'] > 0 else 0.0
+        last_price = max(round(rem_plants[-1]['Variable_Cost'], 2), iex_price)
         cost_per_block = round((must['total_cost'] + iex_cost + rem_cost) / pred_banked, 2) if pred_banked else 0.0
 
         result = OrderedDict({

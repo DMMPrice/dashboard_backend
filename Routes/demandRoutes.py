@@ -13,6 +13,7 @@ db_config = {
     'database': 'guvnldev'
 }
 
+
 @demandApi.route('/dashboard', methods=['GET'])
 def get_dashboard_data():
     try:
@@ -64,3 +65,5 @@ def get_demand_data():
         return jsonify(rows)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)})
+
+
