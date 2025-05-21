@@ -11,10 +11,10 @@ import json
 
 # MySQL configuration
 db_config = {
-    'user': 'DB-Admin',
-    'password': 'DBTest@123',
-    'host': '69.62.74.149',
-    'database': 'guvnldev'
+    'user': 'root',
+    'password': '',
+    'host': 'localhost',
+    'database': 'guvnl_dev'
 }
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes and origins
@@ -115,4 +115,4 @@ def hello_world():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=4000, threaded=True, debug=True)  # Run the app on all available IP addresses
+    app.run(host='0.0.0.0', port=5000, threaded=True, debug=True)  # Run the app on all available IP addresses

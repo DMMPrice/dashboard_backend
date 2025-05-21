@@ -7,10 +7,10 @@ plantAPI = Blueprint('plant', __name__)
 
 # MySQL configuration
 db_config = {
-    'user': 'DB-Admin',
-    'password': 'DBTest@123',
-    'host': '69.62.74.149',
-    'database': 'guvnldev'
+    'user': 'root',
+    'password': '',
+    'host': 'localhost',
+    'database': 'guvnl_dev'
 }
 
 
@@ -148,23 +148,43 @@ def get_plant_data():
 
 @plantAPI.route('/<plant_name>', methods=['GET'])
 def get_each_plant_data(plant_name):
+    # 1️⃣ grab start/end from query-string
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    if not start_date or not end_date:
+        return jsonify({
+            "error": "start_date and end_date parameters are required, e.g. ?start_date=2025-05-01T00:00:00&end_date=2025-05-02T00:00:00"
+        }), 400
+
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # Fetch the data within the date range for the given plant
-        sum_query = f"SELECT * FROM `{plant_name}`"
-        cursor.execute(sum_query)
-        sum_result = cursor.fetchall()
+        # 2️⃣ filter rows in the given plant table by TimeStamp
+        query = f"""
+            SELECT *
+            FROM `{plant_name}`
+            WHERE `TimeStamp` BETWEEN %s AND %s
+        """
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
+        return jsonify(rows), 200
 
-        return jsonify(sum_result), 200
     except mysql.connector.Error as err:
-        return jsonify({"error": "No Data Found"})
+        # returns the MySQL error message for easier debugging
+        return jsonify({"error": str(err)}), 500
+
     except Exception as e:
-        return jsonify({"error": "No Data Found"})
+        return jsonify({"error": "Internal server error"}), 500
+
+    finally:
+        # 3️⃣ always clean up
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
 
 @plantAPI.route('/', methods=['POST'])

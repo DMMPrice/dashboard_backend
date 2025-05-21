@@ -7,10 +7,10 @@ iexApi = Blueprint('iex', __name__)
 
 # MySQL configuration
 db_config = {
-    'user': 'DB-Admin',
-    'password': 'DBTest@123',
-    'host': '69.62.74.149',
-    'database': 'guvnldev'
+    'user': 'root',
+    'password': '',
+    'host': 'localhost',
+    'database': 'guvnl_dev'
 }
 
 
