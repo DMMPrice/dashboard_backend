@@ -343,3 +343,50 @@ def get_demand():
     finally:
         if 'cursor' in locals(): cursor.close()
         if 'conn' in locals(): conn.close()
+
+
+@procurementAPI.route('/range', methods=['GET'])
+def get_demand_range():
+    start = request.args.get('start')  # e.g. "2021-04-01 00:00:00"
+    end = request.args.get('end')  # e.g. "2021-04-02 00:00:00"
+
+    if not start or not end:
+        return jsonify({"error": "Both 'start' and 'end' query parameters are required"}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # fetch raw rows (fixed: removed extra comma)
+        cursor.execute("""
+                       SELECT timestamp, cost_per_block, last_price
+                       FROM demand_output
+                       WHERE timestamp BETWEEN %s
+                         AND %s
+                       ORDER BY TimeStamp
+                       """, (start, end))
+        rows = cursor.fetchall()
+
+        # calculate total and average
+        total_cost_per_block = sum(r['cost_per_block'] for r in rows)
+        average_cost_per_block = total_cost_per_block / len(rows) if rows else None
+
+        total_mod = sum(r['last_price'] for r in rows)
+        average_mod = total_mod / len(rows) if rows else None
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "data": rows,
+            "summary": {
+                "total_cost_per_block": total_cost_per_block,
+                "average_cost_per_block": round(average_cost_per_block, 2),
+                "total_mod": total_mod,
+                "average_mod": round(average_mod, 2)
+
+            }
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500

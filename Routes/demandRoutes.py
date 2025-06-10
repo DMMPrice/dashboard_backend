@@ -65,3 +65,45 @@ def get_demand_data():
         return jsonify(rows)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)})
+
+
+@demandApi.route('/range', methods=['GET'])
+def get_demand_range():
+    start = request.args.get('start')  # e.g. "2021-04-01 00:00:00"
+    end = request.args.get('end')  # e.g. "2021-04-02 00:00:00"
+
+    if not start or not end:
+        return jsonify({"error": "Both 'start' and 'end' query parameters are required"}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # fetch raw rows
+        cursor.execute("""
+                       SELECT TimeStamp,
+                              `Demand(Actual)`    AS actual,
+                              `Demand(Pred)` AS predicted
+                       FROM demand_data
+                       WHERE TimeStamp BETWEEN %s AND %s
+                       ORDER BY TimeStamp
+                       """, (start, end))
+        rows = cursor.fetchall()
+
+        # compute summaries
+        total_actual = sum(r['actual'] for r in rows)
+        total_predicted = sum(r['predicted'] for r in rows)
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "data": rows,
+            "summary": {
+                "total_actual": total_actual,
+                "total_predicted": total_predicted
+            }
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500

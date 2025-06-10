@@ -32,6 +32,47 @@ def get_price_data():
         return jsonify({"error": str(err)}), 500
 
 
+@iexApi.route('/range', methods=['GET'])
+def get_demand_range():
+    start = request.args.get('start')  # e.g. "2021-04-01 00:00:00"
+    end = request.args.get('end')  # e.g. "2021-04-02 00:00:00"
+
+    if not start or not end:
+        return jsonify({"error": "Both 'start' and 'end' query parameters are required"}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # fetch raw rows (fixed: removed extra comma)
+        cursor.execute("""
+                       SELECT TimeStamp, Pred_Price AS predicted
+                       FROM iex_data
+                       WHERE TimeStamp BETWEEN %s
+                         AND %s
+                       ORDER BY TimeStamp
+                       """, (start, end))
+        rows = cursor.fetchall()
+
+        # calculate total and average
+        total_predicted = sum(r['predicted'] for r in rows)
+        average_predicted = total_predicted / len(rows) if rows else None
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "data": rows,
+            "summary": {
+                "total_predicted": total_predicted,
+                "average_predicted": round(average_predicted, 2)
+            }
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
 @iexApi.route('/dashboard', methods=['GET'])
 def get_dashboard():
     try:
