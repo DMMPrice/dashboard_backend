@@ -8,13 +8,18 @@ from Routes.BankingRoutes import bankingAPI
 from Routes.availibilityfactorRoutes import availabilityAPI
 import mysql.connector
 import json
+from dotenv import load_dotenv
+import os
 
-# MySQL configuration
+# load .env
+load_dotenv()
+
+# MySQL configuration from env
 db_config = {
-    'user': 'root',
-    'password': '',
-    'host': 'localhost',
-    'database': 'guvnl_dev'
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'database': os.getenv('DB_NAME'),
 }
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes and origins
@@ -55,7 +60,7 @@ def get_data_with_sum():
         # ── 2️⃣ IEX data ────────────────────────────────────
         cursor.execute(
             "SELECT * "
-            "FROM iex_data "
+            "FROM price "
             "WHERE `TimeStamp` BETWEEN %s AND %s",
             (start_date, end_date)
         )

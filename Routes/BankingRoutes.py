@@ -1,14 +1,21 @@
 from flask import Blueprint, jsonify, request
 import mysql.connector
 import datetime
+from dotenv import load_dotenv
+import os
 
 bankingAPI = Blueprint('banking', __name__)
 
+
+# load .env
+load_dotenv()
+
+# MySQL configuration from env
 db_config = {
-    'user': 'root',
-    'password': '',
-    'host': 'localhost',
-    'database': 'guvnl_dev'
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'database': os.getenv('DB_NAME'),
 }
 
 

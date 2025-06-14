@@ -1,16 +1,22 @@
 # demandRoutes.py
 from flask import Blueprint, jsonify, request
 import mysql.connector
+from dotenv import load_dotenv
+import os
 
 # Create a Blueprint
 demandApi = Blueprint('demand', __name__)
 
-# MySQL configuration
+
+# load .env
+load_dotenv()
+
+# MySQL configuration from env
 db_config = {
-    'user': 'root',
-    'password': '',
-    'host': 'localhost',
-    'database': 'guvnl_dev'
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'database': os.getenv('DB_NAME'),
 }
 
 
