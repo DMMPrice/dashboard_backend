@@ -15,7 +15,7 @@ db_config = {
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAME'),
+    'database': os.getenv('DB_NAMES').split(',')[0]  # Using guvnl_consumers for substation routes,
 }
 
 @substationApi.route('/all', methods=['GET'])
