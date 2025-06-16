@@ -6,6 +6,7 @@ from Routes.procurementRoutes import procurementAPI
 from Routes.plantRoutes import plantAPI
 from Routes.BankingRoutes import bankingAPI
 from Routes.availibilityfactorRoutes import availabilityAPI
+from Routes.BackdownRoutes import backDownApi
 from Routes.dtrRoutes import dtrApi
 from Routes.feederRoutes import feederApi
 from Routes.substationRoutes import substationApi
@@ -35,6 +36,7 @@ app.register_blueprint(demandApi, url_prefix='/demand')
 app.register_blueprint(bankingAPI, url_prefix='/banking')
 app.register_blueprint(iexApi, url_prefix='/iex')
 app.register_blueprint(availabilityAPI, url_prefix='/availability')
+app.register_blueprint(backDownApi, url_prefix='/backdown')
 app.register_blueprint(dtrApi, url_prefix='/dtr')
 app.register_blueprint(feederApi, url_prefix='/feeder')
 app.register_blueprint(substationApi, url_prefix='/substation')
