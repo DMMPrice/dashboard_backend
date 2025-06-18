@@ -11,6 +11,10 @@ from Routes.dtrRoutes import dtrApi
 from Routes.feederRoutes import feederApi
 from Routes.substationRoutes import substationApi
 from Routes.lowTensionRoutes import lowTensionApi
+from Routes.regionRoutes import regionApi
+from Routes.divisionRoutes import divisionApi
+from Routes.powerTheftAnalysisRoutes import powerTheftApi
+from Routes.consumerRoutes import consumerApi
 import mysql.connector
 import json
 from dotenv import load_dotenv
@@ -26,21 +30,26 @@ db_config = {
     'host': os.getenv('DB_HOST'),
     'database': os.getenv('DB_NAME'),
 }
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes and origins
 
-# Register the Blueprint
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Register blueprints with their URL prefixes
+app.register_blueprint(regionApi, url_prefix='/region')
+app.register_blueprint(divisionApi, url_prefix='/division')
+app.register_blueprint(substationApi, url_prefix='/substation')
+app.register_blueprint(feederApi, url_prefix='/feeder')
+app.register_blueprint(dtrApi, url_prefix='/dtr')
+app.register_blueprint(powerTheftApi, url_prefix='/power-theft')
+app.register_blueprint(demandApi, url_prefix='/demand')
+app.register_blueprint(iexApi, url_prefix='/iex')
 app.register_blueprint(procurementAPI, url_prefix='/procurement')
 app.register_blueprint(plantAPI, url_prefix='/plant')
-app.register_blueprint(demandApi, url_prefix='/demand')
 app.register_blueprint(bankingAPI, url_prefix='/banking')
-app.register_blueprint(iexApi, url_prefix='/iex')
 app.register_blueprint(availabilityAPI, url_prefix='/availability')
 app.register_blueprint(backDownApi, url_prefix='/backdown')
-app.register_blueprint(dtrApi, url_prefix='/dtr')
-app.register_blueprint(feederApi, url_prefix='/feeder')
-app.register_blueprint(substationApi, url_prefix='/substation')
 app.register_blueprint(lowTensionApi, url_prefix='/low-tension')
+app.register_blueprint(consumerApi, url_prefix='/consumer')
 
 
 @app.route('/dashboard', methods=['GET'])
