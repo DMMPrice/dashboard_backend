@@ -17,7 +17,7 @@ from Routes.divisionRoutes import divisionApi
 from Routes.powerTheftRoutes import powerTheftApi
 from Routes.regionRoutes import regionApi
 from Routes.divisionRoutes import divisionApi
-from Routes.powerTheftAnalysisRoutes import powerTheftApi
+from Routes.powerTheftRoutes import powerTheftApi
 from Routes.consumerRoutes import consumerApi
 import mysql.connector
 import json
