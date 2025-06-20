@@ -28,7 +28,7 @@ db_config = {
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAME'),
+    'database': os.getenv('DB_NAMES'),
 }
 
 app = Flask(__name__)
@@ -53,84 +53,45 @@ app.register_blueprint(consumerApi, url_prefix='/consumer')
 
 
 @app.route('/dashboard', methods=['GET'])
-def get_data_with_sum():
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    if not start_date or not end_date:
-        return jsonify({"error": "Start date and end date parameters are required"}), 400
-
+def get_dashboard_data():
     try:
-        conn = mysql.connector.connect(**db_config)
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            return jsonify({"error": "start_date and end_date are required"}), 400
+
+        # Create database connection
+        conn = mysql.connector.connect(
+            host=os.getenv('DB_HOST'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            database=os.getenv('DB_NAMES').split(',')[0]  # Using first database
+        )
         cursor = conn.cursor(dictionary=True)
 
-        # ── 1️⃣ Raw demand data ──────────────────────────────
-        cursor.execute(
-            "SELECT * "
-            "FROM demand_data "
-            "WHERE `TimeStamp` BETWEEN %s AND %s",
-            (start_date, end_date)
-        )
-        demand_rows = cursor.fetchall()
-
-        # compute sums for demand_data (adjust field names to your schema)
-        total_actual = sum(r.get('Actual_Demand', 0) for r in demand_rows)
-        total_predicted = sum(r.get('Predicted_Demand', 0) for r in demand_rows)
-
-        # ── 2️⃣ IEX data ────────────────────────────────────
-        cursor.execute(
-            "SELECT * "
-            "FROM price "
-            "WHERE `TimeStamp` BETWEEN %s AND %s",
-            (start_date, end_date)
-        )
-        iex_rows = cursor.fetchall()
-
-        # example: sum some numeric field in iex_data
-        total_iex_value = sum(r.get('SomeIexMetric', 0) for r in iex_rows)
-
-        # ── 3️⃣ Procurement data ────────────────────────────
-        cursor.execute(
-            "SELECT * FROM demand_output WHERE `TimeStamp` BETWEEN %s AND %s",
-            (start_date, end_date)
-        )
-        procurement_rows = cursor.fetchall()
-
-        # for each row, parse the JSON-string columns
-        for row in procurement_rows:
-            # iex_data is a JSON-string: e.g. "{\"Qty_Pred\": 0, …}"
-            if row.get("iex_data"):
-                try:
-                    row["iex_data"] = json.loads(row["iex_data"])
-                except json.JSONDecodeError:
-                    # leave it as string if it really isn't JSON
-                    pass
-
-            # must_run is a JSON array in string form
-            if row.get("must_run"):
-                try:
-                    row["must_run"] = json.loads(row["must_run"])
-                except json.JSONDecodeError:
-                    pass
-
-            # remaining_plants likewise
-            if row.get("remaining_plants"):
-                try:
-                    row["remaining_plants"] = json.loads(row["remaining_plants"])
-                except json.JSONDecodeError:
-                    pass
-
+        # Your dashboard query here
+        cursor.execute("""
+            SELECT * FROM dtr 
+            WHERE DATE(installed_date) BETWEEN %s AND %s
+        """, (start_date, end_date))
+        
+        results = cursor.fetchall()
         cursor.close()
         conn.close()
 
-        return jsonify({
-            "demand": demand_rows,
-            "iex": iex_rows,
-            "procurement": procurement_rows,
-        })
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    except mysql.connector.Error as err:
-        # you might want to log err.errno, err.msg, etc.
-        return jsonify({"error": str(err)}), 500
+# Add error handler for 500 errors
+@app.errorhandler(500)
+def handle_500_error(e):
+    return jsonify({
+        "error": "Internal server error",
+        "message": str(e)
+    }), 500
 
 
 @app.route('/')
