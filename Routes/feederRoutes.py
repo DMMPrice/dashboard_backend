@@ -24,7 +24,7 @@ def get_all_feeder_data():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
-        # Query from power_theft.Feeder table        cursor.execute("SELECT * FROM feeder")
+        cursor.execute("SELECT * FROM feeder")
         feeder_data = cursor.fetchall()
         
         cursor.close()
@@ -135,5 +135,35 @@ def delete_feeder_record(id):
         if affected_rows > 0:
             return jsonify({"message": "Record deleted successfully"}), 200
         return jsonify({"error": "Record not found"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@feederApi.route('/by-substation/<string:substation_id>', methods=['GET'])
+def get_feeders_by_substation(substation_id):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get all feeders for the given substation with their details
+        query = """
+            SELECT f.feeder_id, f.feeder_name, f.substation_id, s.substation_name
+            FROM feeder f
+            LEFT JOIN substation s ON f.substation_id = s.substation_id
+            WHERE f.substation_id = %s
+            ORDER BY f.feeder_name
+        """
+        cursor.execute(query, (substation_id,))
+        feeders = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+
+        if not feeders:
+            return jsonify({"message": "No feeders found for this substation"}), 404
+            
+        return jsonify({
+            "status": "success",
+            "data": feeders
+        }), 200
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
