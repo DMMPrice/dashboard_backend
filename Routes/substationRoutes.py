@@ -24,7 +24,7 @@ def get_all_substation_data():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
-        # Query from power_theft.Substation table        cursor.execute("SELECT * FROM substation")
+        cursor.execute("SELECT * FROM substation")
         substation_data = cursor.fetchall()
         
         cursor.close()

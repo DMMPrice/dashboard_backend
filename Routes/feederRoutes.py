@@ -24,7 +24,7 @@ def get_all_feeder_data():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
-        # Query from power_theft.Feeder table        cursor.execute("SELECT * FROM feeder")
+        cursor.execute("SELECT * FROM feeder")
         feeder_data = cursor.fetchall()
         
         cursor.close()
