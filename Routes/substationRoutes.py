@@ -215,3 +215,16 @@ def get_high_risk_substations():
         return jsonify(high_risk_data), 200
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+
+@substationApi.route('/by-division/<division_id>', methods=['GET'])
+def get_substations_by_division(division_id):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM substation WHERE division_id = %s", (division_id,))
+        substations = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(substations), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500

@@ -15,7 +15,7 @@ db_config = {
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_NAMES'),
+    'database': os.getenv('DB_NAMES').split(',')[0],
 }
 
 @feederApi.route('/all', methods=['GET'])
@@ -135,5 +135,18 @@ def delete_feeder_record(id):
         if affected_rows > 0:
             return jsonify({"message": "Record deleted successfully"}), 200
         return jsonify({"error": "Record not found"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@feederApi.route('/by-substation/<substation_id>', methods=['GET'])
+def get_feeders_by_substation(substation_id):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM feeder WHERE substation_id = %s", (substation_id,))
+        feeders = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "success", "data": feeders}), 200
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
