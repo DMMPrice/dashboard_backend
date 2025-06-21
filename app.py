@@ -11,9 +11,13 @@ from Routes.dtrRoutes import dtrApi
 from Routes.feederRoutes import feederApi
 from Routes.substationRoutes import substationApi
 from Routes.lowTensionRoutes import lowTensionApi
+from Routes.consumerRoutes import consumerApi
 from Routes.regionRoutes import regionApi
 from Routes.divisionRoutes import divisionApi
-from Routes.powerTheftAnalysisRoutes import powerTheftApi
+from Routes.powerTheftRoutes import powerTheftApi
+from Routes.regionRoutes import regionApi
+from Routes.divisionRoutes import divisionApi
+from Routes.powerTheftRoutes import powerTheftApi
 from Routes.consumerRoutes import consumerApi
 import mysql.connector
 import json
@@ -50,6 +54,9 @@ app.register_blueprint(availabilityAPI, url_prefix='/availability')
 app.register_blueprint(backDownApi, url_prefix='/backdown')
 app.register_blueprint(lowTensionApi, url_prefix='/low-tension')
 app.register_blueprint(consumerApi, url_prefix='/consumer')
+app.register_blueprint(regionApi, url_prefix='/')
+app.register_blueprint(divisionApi, url_prefix='/')
+app.register_blueprint(powerTheftApi, url_prefix='/')
 
 
 @app.route('/dashboard', methods=['GET'])
@@ -66,7 +73,7 @@ def get_dashboard_data():
             host=os.getenv('DB_HOST'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAMES').split(',')[0]  # Using first database
+            database=os.getenv('DB_NAMES')  # Using first database
         )
         cursor = conn.cursor(dictionary=True)
 
